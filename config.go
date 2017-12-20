@@ -45,6 +45,9 @@ type Config struct {
 	// the transport.
 	TCPTimeout time.Duration
 
+	// ZoneId is the zone identify which members to consider
+	ZoneId uint8
+
 	// IndirectChecks is the number of nodes that will be asked to perform
 	// an indirect probe of a node in the case a direct probe fails. Memberlist
 	// waits for an ack from any single indirect node, so increasing this
@@ -306,6 +309,7 @@ func DefaultLANConfig() *Config {
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
 		CIDRsAllowed:      nil, // same as allow all
+		ZoneId:            0,
 	}
 }
 

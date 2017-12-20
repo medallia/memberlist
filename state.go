@@ -35,6 +35,7 @@ type Node struct {
 	DMin  uint8         // Min protocol version for the delegate to understand
 	DMax  uint8         // Max protocol version for the delegate to understand
 	DCur  uint8         // Current version delegate is speaking
+	Zid   uint8         // Zone id
 }
 
 // Address returns the host:port form of a node's address, suitable for use
@@ -397,7 +398,8 @@ HANDLE_REMOTE_FAILURE:
 	kNodes := kRandomNodes(m.config.IndirectChecks, m.nodes, func(n *nodeState) bool {
 		return n.Name == m.config.Name ||
 			n.Name == node.Name ||
-			n.State != StateAlive
+			n.State != StateAlive ||
+			(n.Zid > 0 && n.Zid != m.config.ZoneId)
 	})
 	m.nodeLock.RUnlock()
 
@@ -908,6 +910,7 @@ func (m *Memberlist) refute(me *nodeState, accusedInc uint32) {
 			me.PMin, me.PMax, me.PCur,
 			me.DMin, me.DMax, me.DCur,
 		},
+		Zid: me.Zid,
 	}
 	m.encodeAndBroadcast(me.Addr.String(), aliveMsg, a)
 }
@@ -936,6 +939,10 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 			return
 		}
 	}
+	if m.config.ZoneId > 0 && a.Zid > 0 && a.Zid != m.config.ZoneId {
+		m.logger.Printf("[DEBUG] memberlist: dropping aliveNode: %s", a.Node)
+		return
+	}
 
 	// Invoke the Alive delegate if any. This can be used to filter out
 	// alive messages based on custom logic. For example, using a cluster name.
@@ -958,6 +965,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 			DMin: a.Vsn[3],
 			DMax: a.Vsn[4],
 			DCur: a.Vsn[5],
+			Zid:  a.Zid,
 		}
 		if err := m.config.Alive.NotifyAlive(node); err != nil {
 			m.logger.Printf("[WARN] memberlist: ignoring alive message for '%s': %s",
@@ -981,6 +989,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 				Addr: a.Addr,
 				Port: a.Port,
 				Meta: a.Meta,
+				Zid:  a.Zid,
 			},
 			State: StateDead,
 		}
@@ -1037,6 +1046,7 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 						Addr: a.Addr,
 						Port: a.Port,
 						Meta: a.Meta,
+						Zid:  a.Zid,
 					}
 					m.config.Conflict.NotifyConflict(&state.Node, &other)
 				}
@@ -1140,6 +1150,10 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	if !ok {
 		return
 	}
+	if m.config.ZoneId > 0 && s.Zid > 0 && s.Zid != m.config.ZoneId {
+		m.logger.Printf("[DEBUG] memberlist: dropping Suspect from zone: %s", s.Node)
+		return
+	}
 
 	// Ignore old incarnation numbers
 	if s.Incarnation < state.Incarnation {
@@ -1228,6 +1242,10 @@ func (m *Memberlist) deadNode(d *dead) {
 	if !ok {
 		return
 	}
+	if m.config.ZoneId > 0 && d.Zid > 0 && d.Zid != m.config.ZoneId {
+		m.logger.Printf("[DEBUG] memberlist: dropping Dead from zone: %s", d.Node)
+		return
+	}
 
 	// Ignore old incarnation numbers
 	if d.Incarnation < state.Incarnation {
@@ -1282,6 +1300,11 @@ func (m *Memberlist) deadNode(d *dead) {
 // state transfer
 func (m *Memberlist) mergeState(remote []pushNodeState) {
 	for _, r := range remote {
+		m.logger.Printf("[DEBUG] memberlist: State: %s %d/%d", r.Name, m.config.ZoneId, r.Zid)
+		if m.config.ZoneId > 0 && r.Zid > 0 && r.Zid != m.config.ZoneId {
+			m.logger.Printf("[DEBUG] memberlist: dropping node state from zone: %d/%s", r.Zid, r.Name)
+			continue
+		}
 		switch r.State {
 		case StateAlive:
 			a := alive{
@@ -1291,6 +1314,7 @@ func (m *Memberlist) mergeState(remote []pushNodeState) {
 				Port:        r.Port,
 				Meta:        r.Meta,
 				Vsn:         r.Vsn,
+				Zid:         r.Zid,
 			}
 			m.aliveNode(&a, nil, false)
 
