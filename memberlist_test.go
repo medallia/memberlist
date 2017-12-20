@@ -448,12 +448,14 @@ func TestMemberList_Members(t *testing.T) {
 
 func TestMemberlist_Join(t *testing.T) {
 	m1 := GetMemberlist(t)
+	m1.config.ZoneId = 1
 	m1.setAlive()
 	m1.schedule()
 	defer m1.Shutdown()
 
 	// Create a second node
 	c := DefaultLANConfig()
+	c.ZoneId = 0
 	addr1 := getBindAddr()
 	c.Name = addr1.String()
 	c.BindAddr = addr1.String()
@@ -472,7 +474,7 @@ func TestMemberlist_Join(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
-
+	t.Logf("xx %+v", m2.nodes[0].Zid)
 	// Check the hosts
 	if len(m2.Members()) != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
