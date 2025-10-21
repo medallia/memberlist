@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-metrics/compat"
+	metrics "github.com/hashicorp/go-metrics/compat"
 	"github.com/hashicorp/go-multierror"
 )
 
@@ -59,6 +59,9 @@ type Config struct {
 	// should really be called StreamTimeout now that we have generalized
 	// the transport.
 	TCPTimeout time.Duration
+
+	// ZoneId is the zone identify which members to consider
+	ZoneId uint8
 
 	// IndirectChecks is the number of nodes that will be asked to perform
 	// an indirect probe of a node in the case a direct probe fails. Memberlist
@@ -335,6 +338,7 @@ func DefaultLANConfig() *Config {
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
 		CIDRsAllowed:      nil, // same as allow all
+		ZoneId:            0,
 
 		QueueCheckInterval: 30 * time.Second,
 	}

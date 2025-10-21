@@ -467,6 +467,7 @@ func (m *Memberlist) setAlive() error {
 		Port:        uint16(port),
 		Meta:        meta,
 		Vsn:         m.config.BuildVsnArray(),
+		Zid:         m.config.ZoneId,
 	}
 	m.aliveNode(&a, nil, true)
 
@@ -532,6 +533,7 @@ func (m *Memberlist) UpdateNode(timeout time.Duration) error {
 		Port:        state.Port,
 		Meta:        meta,
 		Vsn:         m.config.BuildVsnArray(),
+		Zid:         m.config.ZoneId,
 	}
 	notifyCh := make(chan struct{})
 	m.aliveNode(&a, notifyCh, true)

@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hashicorp/go-metrics/compat"
+	metrics "github.com/hashicorp/go-metrics/compat"
 	"github.com/hashicorp/go-msgpack/v2/codec"
 )
 
@@ -145,6 +145,7 @@ type suspect struct {
 	Incarnation uint32
 	Node        string
 	From        string // Include who is suspecting
+	Zid         uint8
 }
 
 // alive is broadcast when we know a node is alive.
@@ -159,6 +160,7 @@ type alive struct {
 	// The versions of the protocol/delegate that are being spoken, order:
 	// pmin, pmax, pcur, dmin, dmax, dcur
 	Vsn []uint8
+	Zid uint8
 }
 
 // dead is broadcast when we confirm a node is dead
@@ -167,6 +169,7 @@ type dead struct {
 	Incarnation uint32
 	Node        string
 	From        string // Include who is suspecting
+	Zid         uint8
 }
 
 // pushPullHeader is used to inform the
@@ -192,6 +195,7 @@ type pushNodeState struct {
 	Incarnation uint32
 	State       NodeStateType
 	Vsn         []uint8 // Protocol versions
+	Zid         uint8   // zone id
 }
 
 // compress is used to wrap an underlying payload
@@ -737,7 +741,10 @@ func (m *Memberlist) handleAlive(buf []byte, from net.Addr) {
 	if m.ProtocolVersion() < 2 || live.Port == 0 {
 		live.Port = uint16(m.config.BindPort)
 	}
-
+	if m.config.ZoneId > 0 && live.Zid > 0 && live.Zid != m.config.ZoneId {
+		m.logger.Printf("[DEBUG] memberlist: Not in our zone: %d %d", m.config.ZoneId, live.Zid)
+		return
+	}
 	m.aliveNode(&live, nil, false)
 }
 
@@ -1011,6 +1018,8 @@ func (m *Memberlist) sendLocalState(conn net.Conn, join bool, streamLabel string
 			n.PMin, n.PMax, n.PCur,
 			n.DMin, n.DMax, n.DCur,
 		}
+		localNodes[idx].Zid = n.Zid
+		m.logger.Printf("[DEBUG] memberlist: Send local state %d", localNodes[idx].Zid)
 	}
 	m.nodeLock.RUnlock()
 
@@ -1264,6 +1273,10 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 	if join && m.config.Merge != nil {
 		nodes := make([]*Node, len(remoteNodes))
 		for idx, n := range remoteNodes {
+			if m.config.ZoneId > 0 && n.Zid > 0 && n.Zid != m.config.ZoneId {
+				m.logger.Printf("[DEBUG] memberlist: dropping node from zone: %d", n.Zid)
+				continue
+			}
 			nodes[idx] = &Node{
 				Name:  n.Name,
 				Addr:  n.Addr,
@@ -1276,6 +1289,7 @@ func (m *Memberlist) mergeRemoteState(join bool, remoteNodes []pushNodeState, us
 				DMin:  n.Vsn[3],
 				DMax:  n.Vsn[4],
 				DCur:  n.Vsn[5],
+				Zid:   n.Zid,
 			}
 		}
 		if err := m.config.Merge.NotifyMerge(nodes); err != nil {

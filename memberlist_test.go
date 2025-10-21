@@ -633,6 +633,7 @@ func TestMemberList_Members(t *testing.T) {
 
 func TestMemberlist_Join(t *testing.T) {
 	c1 := testConfig(t)
+	c1.ZoneId = 1
 	m1, err := Create(c1)
 	require.NoError(t, err)
 	defer m1.Shutdown()
@@ -641,6 +642,7 @@ func TestMemberlist_Join(t *testing.T) {
 
 	// Create a second node
 	c2 := testConfig(t)
+	c2.ZoneId = 0
 	c2.BindPort = bindPort
 
 	m2, err := Create(c2)
@@ -654,7 +656,7 @@ func TestMemberlist_Join(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
 	}
-
+	t.Logf("xx %+v", m2.nodes[0].Zid)
 	// Check the hosts
 	if len(m2.Members()) != 2 {
 		t.Fatalf("should have 2 nodes! %v", m2.Members())
